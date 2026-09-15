@@ -1,5 +1,5 @@
 steps:
-  - name: Checkout repository
+  - name: Checkout
     uses: actions/checkout@v5
 
   - name: Setup Java 17
@@ -8,25 +8,26 @@ steps:
       distribution: temurin
       java-version: '17'
 
-  - name: Upgrade Gradle Wrapper
-    working-directory: android
-    run: |
-      chmod +x gradlew
-      ./gradlew wrapper --gradle-version 8.14.0
-
   - name: Setup Flutter
     uses: subosito/flutter-action@v2
     with:
       channel: stable
       cache: true
 
-  - name: Check versions
-    run: |
-      flutter --version
-      cd android
-      ./gradlew --version
+  - name: Check Flutter
+    run: flutter --version
 
-  - name: Install dependencies
+  - name: Upgrade Gradle
+    working-directory: android
+    run: |
+      chmod +x gradlew
+      ./gradlew wrapper --gradle-version 8.14.0 --distribution-type all
+
+  - name: Check Gradle
+    working-directory: android
+    run: ./gradlew --version
+
+  - name: Get dependencies
     run: flutter pub get
 
   - name: Build APK
@@ -35,7 +36,7 @@ steps:
   - name: Upload APK
     uses: actions/upload-artifact@v4
     with:
-      name: flutter-release-apk
+      name: app-release
       path: build/app/outputs/flutter-apk/app-release.apk
       if-no-files-found: error
       retention-days: 7
