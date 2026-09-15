@@ -1,42 +1,54 @@
-steps:
-  - name: Checkout
-    uses: actions/checkout@v5
+name: Build Flutter APK
 
-  - name: Setup Java 17
-    uses: actions/setup-java@v5
-    with:
-      distribution: temurin
-      java-version: '17'
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
 
-  - name: Setup Flutter
-    uses: subosito/flutter-action@v2
-    with:
-      channel: stable
-      cache: true
+permissions:
+  contents: read
 
-  - name: Check Flutter
-    run: flutter --version
+jobs:
+  build-apk:
+    name: Build APK
+    runs-on: ubuntu-latest
 
-  - name: Upgrade Gradle
-    working-directory: android
-    run: |
-      chmod +x gradlew
-      ./gradlew wrapper --gradle-version 8.14.0 --distribution-type all
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
-  - name: Check Gradle
-    working-directory: android
-    run: ./gradlew --version
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
 
-  - name: Get dependencies
-    run: flutter pub get
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
 
-  - name: Build APK
-    run: flutter build apk --release
+      - name: Check Flutter
+        run: flutter --version
 
-  - name: Upload APK
-    uses: actions/upload-artifact@v4
-    with:
-      name: app-release
-      path: build/app/outputs/flutter-apk/app-release.apk
-      if-no-files-found: error
-      retention-days: 7
+      - name: Upgrade Gradle
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew wrapper --gradle-version 8.14.0 --distribution-type all
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
