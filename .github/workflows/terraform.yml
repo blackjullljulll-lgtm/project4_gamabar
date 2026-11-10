@@ -1,0 +1,114 @@
+
+name: Build Flutter APK
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Fix Android Versions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Gradle version
+          p = Path("android/gradle/wrapper/gradle-wrapper.properties")
+          s = p.read_text()
+          s = re.sub(
+              r'gradle-[0-9.]+-(?:all|bin)\.zip',
+              'gradle-8.14.3-all.zip',
+              s
+          )
+          p.write_text(s)
+
+          # Android Gradle Plugin and Kotlin
+          files = [
+              Path("android/settings.gradle"),
+              Path("android/settings.gradle.kts"),
+              Path("android/build.gradle"),
+              Path("android/build.gradle.kts"),
+          ]
+
+          for p in files:
+              if not p.exists():
+                  continue
+
+              s = p.read_text()
+
+              # AGP version
+              s = re.sub(
+                  r'(com\.android\.application["\']?\s*\)?\s*version\s*["\'])[^"\']+',
+                  r'\g<1>8.11.1',
+                  s
+              )
+
+              s = re.sub(
+                  r'(com\.android\.tools\.build:gradle:)[0-9.]+',
+                  r'\g<1>8.11.1',
+                  s
+              )
+
+              # Kotlin plugin version
+              s = re.sub(
+                  r'((?:id\s*\(\s*["\']org\.jetbrains\.kotlin\.android["\']\s*\)|id\s+["\']org\.jetbrains\.kotlin\.android["\']|id\s*\(\s*["\']kotlin-android["\']\s*\)|kotlin\s*\(\s*["\']android["\']\s*\))\s*version\s*["\'])[^"\']+',
+                  r'\g<1>2.2.20',
+                  s
+              )
+
+              # Older Gradle Kotlin configuration
+              s = re.sub(
+                  r'(ext\.kotlin_version\s*=\s*["\'])[^"\']+',
+                  r'\g<1>2.2.20',
+                  s
+              )
+
+              s = re.sub(
+                  r'(kotlin_version\s*=\s*["\'])[^"\']+',
+                  r'\g<1>2.2.20',
+                  s
+              )
+
+              s = re.sub(
+                  r'(org\.jetbrains\.kotlin:kotlin-gradle-plugin:)[0-9.]+',
+                  r'\g<1>2.2.20',
+                  s
+              )
+
+              p.write_text(s)
+
+          print("Gradle, AGP, and Kotlin versions updated.")
+          PY
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aplikasi-flutter-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
