@@ -27,10 +27,61 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Fix Gradle Version
+      - name: Fix Gradle and AGP Versions
         run: |
-          sed -i 's/gradle-[0-9.]*-\(all\|bin\)\.zip/gradle-8.14.3-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
-          cat android/gradle/wrapper/gradle-wrapper.properties
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Fix Gradle wrapper
+          p = Path("android/gradle/wrapper/gradle-wrapper.properties")
+          s = p.read_text()
+          s = re.sub(
+              r'gradle-[0-9.]+-(?:all|bin)\.zip',
+              'gradle-8.14.3-all.zip',
+              s
+          )
+          p.write_text(s)
+
+          # Fix Android Gradle Plugin
+          files = [
+              Path("android/settings.gradle"),
+              Path("android/settings.gradle.kts"),
+              Path("android/build.gradle"),
+              Path("android/build.gradle.kts"),
+          ]
+
+          for p in files:
+              if not p.exists():
+                  continue
+
+              lines = p.read_text().splitlines(keepends=True)
+
+              for i, line in enumerate(lines):
+                  if ('com.android.application' in line or
+                      'com.android.tools.build:gradle' in line):
+                      line = re.sub(
+                          r'(?<=version ")[^"]+(?=")',
+                          '8.11.1',
+                          line
+                      )
+                      line = re.sub(
+                          r'(?<=version \')[^\']+(?=\')',
+                          '8.11.1',
+                          line
+                      )
+                      line = re.sub(
+                          r'(com\.android\.tools\.build:gradle:)'
+                          r'[0-9.]+',
+                          r'\g<1>8.11.1',
+                          line
+                      )
+                      lines[i] = line
+
+              p.write_text(''.join(lines))
+
+          print("Gradle and AGP version update completed.")
+          PY
 
       - name: Install Dependencies
         run: flutter pub get
