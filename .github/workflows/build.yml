@@ -27,6 +27,11 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Fix Gradle Version
+        run: |
+          sed -i 's/gradle-[0-9.]*-\(all\|bin\)\.zip/gradle-8.14.3-all.zip/' android/gradle/wrapper/gradle-wrapper.properties
+          cat android/gradle/wrapper/gradle-wrapper.properties
+
       - name: Install Dependencies
         run: flutter pub get
 
