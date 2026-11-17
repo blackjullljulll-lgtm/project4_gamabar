@@ -12,85 +12,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Gunakan Java 17 agar cocok dengan Gradle
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # Install Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Fix Gradle and AGP Versions
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
+      # Pastikan Flutter menggunakan Java 17
+      - name: Configure Java
+        run: flutter config --jdk-dir="$JAVA_HOME"
 
-          # Fix Gradle wrapper
-          p = Path("android/gradle/wrapper/gradle-wrapper.properties")
-          s = p.read_text()
-          s = re.sub(
-              r'gradle-[0-9.]+-(?:all|bin)\.zip',
-              'gradle-8.14.3-all.zip',
-              s
-          )
-          p.write_text(s)
+      - name: Check Java version
+        run: java -version
 
-          # Fix Android Gradle Plugin
-          files = [
-              Path("android/settings.gradle"),
-              Path("android/settings.gradle.kts"),
-              Path("android/build.gradle"),
-              Path("android/build.gradle.kts"),
-          ]
-
-          for p in files:
-              if not p.exists():
-                  continue
-
-              lines = p.read_text().splitlines(keepends=True)
-
-              for i, line in enumerate(lines):
-                  if ('com.android.application' in line or
-                      'com.android.tools.build:gradle' in line):
-                      line = re.sub(
-                          r'(?<=version ")[^"]+(?=")',
-                          '8.11.1',
-                          line
-                      )
-                      line = re.sub(
-                          r'(?<=version \')[^\']+(?=\')',
-                          '8.11.1',
-                          line
-                      )
-                      line = re.sub(
-                          r'(com\.android\.tools\.build:gradle:)'
-                          r'[0-9.]+',
-                          r'\g<1>8.11.1',
-                          line
-                      )
-                      lines[i] = line
-
-              p.write_text(''.join(lines))
-
-          print("Gradle and AGP version update completed.")
-          PY
-
-      - name: Install Dependencies
+      # Install dependencies
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK
+      # Build APK
+      - name: Build APK Release
         run: flutter build apk --release
 
+      # Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: aplikasi-flutter-apk
+          name: aplikasi-flutter
           path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
