@@ -1,53 +1,50 @@
+#!/usr/bin/env bash
+# Jalankan dari ROOT proyek Flutter:  bash fix_gradle.sh
+# Memperbaiki error: "Your project's Gradle version (8.10.2) is lower than Flutter's minimum 9.3.1"
+set -euo pipefail
 
-name: Build Flutter APK
+GRADLE_VERSION="9.3.1"
+AGP_VERSION="9.0.0"      # sesuaikan jika perlu (cek tabel kompatibilitas AGP-Gradle)
+KOTLIN_VERSION="2.2.20"  # sesuaikan jika perlu
 
-on:
-  push:
-    branches:
-      - master
-  workflow_dispatch:
+if [ ! -d android ]; then
+  echo "ERROR: folder 'android' tidak ditemukan. Jalankan script ini dari root proyek Flutter." >&2
+  exit 1
+fi
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# portable sed -i (Linux & macOS)
+sedi() { if sed --version >/dev/null 2>&1; then sed -i "$@"; else sed -i '' "$@"; fi; }
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+echo "==> 1/5 Update Gradle wrapper ke ${GRADLE_VERSION}"
+WRAPPER="android/gradle/wrapper/gradle-wrapper.properties"
+sedi -E "s#^distributionUrl=.*#distributionUrl=https\\\\://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip#" "$WRAPPER"
+grep distributionUrl "$WRAPPER"
 
-      # Gunakan Java 17 agar cocok dengan Gradle
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
+echo "==> 2/5 Update versi AGP & Kotlin di settings.gradle(.kts)"
+for f in android/settings.gradle.kts android/settings.gradle; do
+  [ -f "$f" ] || continue
+  sedi -E "s#(id\(\"com\.android\.application\"\) version \")[^\"]+#\1${AGP_VERSION}#" "$f"
+  sedi -E "s#(id\(\"org\.jetbrains\.kotlin\.android\"\) version \")[^\"]+#\1${KOTLIN_VERSION}#" "$f"
+  sedi -E "s#(id \"com\.android\.application\" version \")[^\"]+#\1${AGP_VERSION}#" "$f"
+  sedi -E "s#(id \"org\.jetbrains\.kotlin\.android\" version \")[^\"]+#\1${KOTLIN_VERSION}#" "$f"
+  echo "   diperbarui: $f"
+  grep -E "com.android.application|kotlin.android" "$f" || true
+done
 
-      # Install Flutter
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-          cache: true
+echo "==> 3/5 Pastikan Java 17 di workflow GitHub Actions (jika ada)"
+if [ -d .github/workflows ]; then
+  for w in .github/workflows/*.yml .github/workflows/*.yaml; do
+    [ -f "$w" ] || continue
+    sedi -E "s#(java-version: *['\"]?)(8|11)(['\"]?)#\117\3#" "$w"
+    echo "   dicek: $w"
+  done
+fi
 
-      # Pastikan Flutter menggunakan Java 17
-      - name: Configure Java
-        run: flutter config --jdk-dir="$JAVA_HOME"
+echo "==> 4/5 Bersihkan build lama"
+flutter clean
+flutter pub get
 
-      - name: Check Java version
-        run: java -version
+echo "==> 5/5 Build APK release"
+flutter build apk --release
 
-      # Install dependencies
-      - name: Install dependencies
-        run: flutter pub get
-
-      # Build APK
-      - name: Build APK Release
-        run: flutter build apk --release
-
-      # Upload APK
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: aplikasi-flutter
-          path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: error
+echo "SELESAI. APK: build/app/outputs/flutter-apk/app-release.apk"
